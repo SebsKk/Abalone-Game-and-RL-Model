@@ -2,6 +2,7 @@ from GameRL import GameRL
 from Player import Player
 from Board import Board 
 from gym import spaces
+from collections import defaultdict
 
 class GameOpsRL:
     def __init__(self, player1, player2):
@@ -14,6 +15,7 @@ class GameOpsRL:
             "valid_move": 1
         }
         self.observation_space = spaces.Box(low=-1, high=1, shape=(len(self.game.board.grid), len(max(self.game.board.grid, key=len))), dtype=int)
+        self.adjacent_cells_dict = self.all_adjacent_balls(self.game.board)
 
 
     def reset(self):
@@ -44,19 +46,221 @@ class GameOpsRL:
 
         return self.get_current_state(), reward, done
     
+    def find_player_balls(self, board, player):
+ 
+        player_positions = []
+        for row_index, row in enumerate(board):
+            for col_index, cell in enumerate(row):
+                if cell == player:
+                    player_positions.append((row_index, col_index))
+        return player_positions
+
+    def all_adjacent_balls(self, board):
+    # build a dictionary of rows to number of columns
+        rows_size = {0:4, 1:5, 2:6, 3:7, 4:8, 5:7, 6:6, 7:5, 8:4}
+        all_adjacent_cells = {}
+
+        for index, row in enumerate(board):
+            for col_n, value in enumerate(row):
+                adjacent_cells = []
+                
+                # Handling the rows < 4
+                if index < 4:
+                    if col_n == 0 and index != 0:
+                        adjacent_cells.extend([(index, col_n + 1), (index + 1, col_n), (index - 1, col_n), (index + 1, col_n + 1)])
+                    elif col_n == 0 and index == 0:
+                        adjacent_cells.extend([(index, col_n + 1), (index + 1, col_n), (index + 1, col_n + 1)])     
+                    elif col_n == rows_size[index] and index != 0:
+                        adjacent_cells.extend([(index, col_n - 1), (index + 1, col_n), (index - 1, col_n - 1), (index + 1, col_n - 1)])
+                    elif col_n == 4 and index == 0:
+                        adjacent_cells.extend([(index, col_n - 1), (index + 1, col_n), (index + 1, col_n - 1)])
+                    elif index == 0:
+                        adjacent_cells.extend([(index, col_n + 1), (index, col_n - 1), (index + 1, col_n), (index + 1, col_n + 1)])    
+                    else:
+                        adjacent_cells.extend([(index, col_n + 1), (index, col_n - 1), (index + 1, col_n), (index + 1, col_n + 1), (index - 1, col_n), (index - 1, col_n - 1)])
+
+                # Handling the rows > 4
+                if index > 4:
+                    if col_n == 0 and index != 8:
+                        adjacent_cells.extend([(index, col_n + 1), (index + 1, col_n), (index - 1, col_n), (index - 1, col_n + 1)])
+                    if col_n == 0 and index == 8:
+                        adjacent_cells.extend([(index, col_n + 1), (index - 1, col_n + 1), (index - 1, col_n)])  
+                    elif col_n == rows_size[index] and index != 8:
+                        adjacent_cells.extend([(index, col_n - 1), (index + 1, col_n - 1), (index - 1, col_n), (index - 1, col_n + 1)])
+                    elif col_n == rows_size[index] and index == 8:
+                        adjacent_cells.extend([(index, col_n - 1), (index - 1, col_n), (index - 1, col_n + 1)])
+                    elif index == 8:
+                        adjacent_cells.extend([(index, col_n + 1), (index, col_n - 1), (index - 1, col_n), (index - 1, col_n + 1)]) 
+                    else:
+                        adjacent_cells.extend([(index, col_n + 1), (index, col_n - 1), (index + 1, col_n), (index + 1, col_n - 1), (index - 1, col_n), (index - 1, col_n + 1)])
+
+                # Handling the middle row (index == 4)
+                if index == 4:
+                    if col_n == 0:
+                        adjacent_cells.extend([(index, col_n + 1), (index + 1, col_n), (index - 1, col_n)])  
+                    elif col_n == rows_size[index]:
+                        adjacent_cells.extend([(index, col_n - 1), (index + 1, col_n - 1), (index - 1, col_n - 1)])
+                    else:
+                        adjacent_cells.extend([(index, col_n + 1), (index, col_n - 1), (index + 1, col_n), (index + 1, col_n - 1), (index - 1, col_n), (index - 1, col_n - 1)])
+
+                # Filter out invalid adjacent cells
+                valid_adjacent_cells = [(i, j) for i, j in adjacent_cells if 0 <= i < len(board) and 0 <= j < len(board[i])]
+
+                # Add the valid adjacent cells to the dictionary
+                all_adjacent_cells[(index, col_n)] = valid_adjacent_cells
+
+        return all_adjacent_cells
+
+    def get_legitimate_one_ball_moves(self, player_positions, adjacent_cells=None):
+        
+        legitimate_one_ball_moves = {}
+
+
+        # Set adjacent cells to our predefined dictionary
+        if adjacent_cells is None:
+            adjacent_cells = self.adjacent_cells_dict
+
+        # Now iterate over all player's balls and check if any adjacent cell to that ball is empty - if yes, then it's a legal move
+        for ball in player_positions:
+            # Get the current list of moves for the ball or an empty list if none are found
+            current_moves = legitimate_one_ball_moves.get(ball, [])
+            for adjacent_cell in adjacent_cells[ball]:
+                if self.game.board.get_cell(adjacent_cell[0], adjacent_cell[1]) == 0:
+                    # Append to the list of moves for the ball
+                    current_moves.append(adjacent_cell)
+            # If there are any moves for the ball, update the dictionary
+            if current_moves:
+                legitimate_one_ball_moves[ball] = current_moves
+
+        return legitimate_one_ball_moves
+
+    def get_legitimate_two_balls_moves(self, player, player_positions, adjacent_cells=None):
+        # Using defaultdict for automatic initialization of missing keys
+        legitimate_two_ball_moves = defaultdict(list)
+
+        if adjacent_cells is None:
+            adjacent_cells = self.adjacent_cells_dict
+
+        # Finding adjacent pairs of player's balls
+        adjacent_pairs = [
+            (ball1, ball2) 
+            for i, ball1 in enumerate(player_positions) 
+            for ball2 in player_positions[i+1:] 
+            if ball2 in adjacent_cells[ball1]
+        ]
+
+        for adjacent_pair in adjacent_pairs:
+            straight_line = self.game.board.pairs_to_straight_lines[adjacent_pair]
+
+            # Mapping each cell to its index within its line for faster access
+            indices = {cell: index for index, cell in enumerate(straight_line)}
+
+            # Define a function to check the move validity in a given direction
+            def check_move_direction(cell, direction):
+                index = indices[cell]
+                next_index = index + direction
+                # Check if the next index is within bounds
+                if 0 <= next_index < len(straight_line):
+                    next_cell = straight_line[next_index]
+                    cell_value = self.game.board.get_cell(next_cell[0], next_cell[1])
+                    # Check the cell value and act accordingly
+                    if cell_value == 0:
+                        legitimate_two_ball_moves[adjacent_pair].append((next_cell, cell))
+                    elif cell_value != player and cell_value is not None:
+                        # If the next cell is not empty and not the player's, check the next one
+                        next_next_index = next_index + direction
+                        if 0 <= next_next_index < len(straight_line):
+                            next_next_cell = straight_line[next_next_index]
+                            if self.game.board.get_cell(next_next_cell[0],next_next_cell[1]) == 0:
+                                legitimate_two_ball_moves[adjacent_pair].append((next_cell, cell))
+
+            # Check both directions for each pair
+            check_move_direction(adjacent_pair[0], -1)
+            check_move_direction(adjacent_pair[1], 1)
+
+        return dict(legitimate_two_ball_moves, player, player_positions, adjacent_cells=None)
+
+
+    def get_legitimate_three_balls_moves(self, player, player_positions, adjacent_cells=None):
+        # Using defaultdict for automatic initialization of missing keys
+        legitimate_three_ball_moves = defaultdict(list)
+
+        # Create the adjacent trios to straight lines dictionary
+        adjacent_trios_dict = self.game.board.trios_to_straight_lines
+
+        # Find adjacent trios of player's balls
+        adjacent_trios = [
+            trio for trio in adjacent_trios_dict
+            if all(ball in player_positions for ball in trio)
+        ]
+
+        # Define a function to check the move validity in a given direction
+        def check_move_direction(trio, direction):
+            straight_line = adjacent_trios_dict[trio]
+            indices = {cell: index for index, cell in enumerate(straight_line)}
+
+            # Find the indices of the trio in the straight line
+            start_index = indices[trio[0]]
+            end_index = indices[trio[2]]
+
+            # Determine the indices to check based on the direction
+            check_indices = [start_index + direction, end_index + direction]
+            
+            i = 0
+            for index in check_indices:
+                
+                # Ensure the index is within the bounds of the line
+                if 0 <= index < len(straight_line):
+                    next_cell = straight_line[index] 
+                    cell_value = self.game.board.get_cell(next_cell[0], next_cell[1])
+                    if cell_value == 0:
+                        if i == 0:
+                            legitimate_three_ball_moves[trio].append((next_cell, trio[0],trio[1]))
+                        else:
+                            legitimate_three_ball_moves[trio].append((next_cell, trio[2],trio[1]))
+                    elif cell_value != player and cell_value is not None:
+                        # Check the next cell if the first one is an opponent's ball
+                        next_index = index + direction
+                        if 0 <= next_index < len(straight_line):
+                            next_next_cell = straight_line[next_index]
+                            if self.game.board.get_cell(next_next_cell[0], next_next_cell[1]) == 0:
+                                if i == 0:
+                                    legitimate_three_ball_moves[trio].append((next_cell, trio[0],trio[1]))
+                                else:
+                                    legitimate_three_ball_moves[trio].append((next_cell, trio[2],trio[1]))
+                            
+                        elif self.game.board.get_cell(next_next_cell[0], next_next_cell[1]) != player and self.game.board.get_cell(next_next_cell[0], next_next_cell[1]) != None:
+                            next_next_index = next_index + direction
+                            if 0 <= next_index < len(straight_line):
+                                next_next_next_cell = straight_line[next_next_index]
+                                if self.game.board.get_cell(next_next_next_cell[0], next_next_next_cell[1]) == 0:
+                                    if i == 0:
+                                        legitimate_three_ball_moves[trio].append((next_cell, trio[0],trio[1]))
+                                    else:
+                                        legitimate_three_ball_moves[trio].append((next_cell, trio[2],trio[1]))
+
+                i+=1 
+        # Check both directions for each trio
+        for trio in adjacent_trios:
+            check_move_direction(trio, -1)
+            check_move_direction(trio, 1)
+
+        return legitimate_three_ball_moves
+            
     def get_action_space(self):
 
         action_space = []
-        # get cell positions of all current player's balls
-        
-        
-        # first get all legitimate one ball moves
+        # here I search for all current player's ball positions
+        curr_player_ball_positions = self.find_player_balls(self.game.board,self.current_player)
 
+        # first get all legitimate one ball moves
+        one_ball_moves = self.get_legitimate_one_ball_moves(curr_player_ball_positions)
 
         # then get all 2 ball moves
+        two_balls_moves = self.get_legitimate_two_balls_moves(self.current_player, curr_player_ball_positions)
 
         # then get 3 ball moves
-
+        three_balls_moves = self.get_legitimate_three_balls_moves(self.current_player, curr_player_ball_positions)
         
     def get_current_state(self):
         """Return the current state of the board."""

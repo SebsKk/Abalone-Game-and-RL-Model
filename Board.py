@@ -110,7 +110,76 @@ class Board:
                     any(is_consecutive_subset(balls_end, line) for line in all_straight_lines) and \
                     is_consecutive_subset(balls_end, start_line)
     
+    def is_adjacent(self, balls_start, balls_end):
     
+        # build a dictionary of rows to number of columns
+
+        rows_size = {0:4, 1:5, 2:6, 3:7, 4:8, 5:7, 6:6, 7:5, 8:4}
+
+        all_adjacent_balls = []
+        i = 0
+
+        for ball in balls_start:
+            print(rows_size[ball[0]], ball[1])
+            adjacent_balls = []
+            
+            # we will need to go over all the corners and the middle row as those are exceptions, then check for 'normal' rows
+            # also we need to divide the rows as the ones < 4 and > 4
+            if ball[0] < 4:
+                if ball[1] == 0 and ball[0] != 0:
+                        adjacent_balls.extend([(ball[0], ball[1] + 1),(ball[0] + 1, ball[1]), (ball[0] - 1, ball[1]), (ball[0] + 1, ball[1] + 1)] )
+                # we need another constraint for the first row where the first ball only has 3 adjacent cells         
+                elif ball[1] == 0 and ball[0] == 0:
+                        adjacent_balls.extend([(ball[0], ball[1] + 1),(ball[0] + 1, ball[1]), (ball[0] + 1, ball[1] + 1)] )     
+                # now go over the last cells
+                elif ball[1] == rows_size[ball[0]] and ball[0] != 0:
+                    adjacent_balls.extend([(ball[0], ball[1] - 1),(ball[0] + 1, ball[1]), (ball[0] - 1, ball[1] -1 ), (ball[0] + 1, ball[1] + 1) ])
+                # we need another constraint for the first row where the last ball only has 3 adjacent cells            
+                elif ball[1] == 4 and ball[0] == 0:
+                    adjacent_balls.extend([(ball[0], ball[1] - 1),(ball[0] + 1, ball[1]), (ball[0] + 1, ball[1] + 1) ])
+                # now go over the first row other than corners
+                elif  ball[0] == 0:
+                        adjacent_balls.extend([(ball[0], ball[1] + 1), (ball[0], ball[1] - 1),(ball[0] + 1, ball[1]), (ball[0] + 1, ball[1] + 1)] )     
+                # now go over all the other cells
+                else:
+                    adjacent_balls.extend([(ball[0], ball[1] + 1), (ball[0], ball[1] - 1),(ball[0] + 1, ball[1]), (ball[0] + 1, ball[1] + 1), (ball[0] - 1, ball[1]), (ball[0] - 1, ball[1] - 1)] )     
+            if ball[0] > 4:
+                    if ball[1] == 0 and ball[0] != 8:
+                        adjacent_balls.extend([(ball[0], ball[1] + 1),(ball[0] + 1, ball[1]), (ball[0] - 1, ball[1]), (ball[0] - 1, ball[1] + 1)]  )
+                    # we need another constraint for the last row where the first ball only has 3 adjacent cells     
+                    if ball[1] == 0 and ball[0] == 8:
+                        adjacent_balls.extend([(ball[0], ball[1] + 1),(ball[0] - 1, ball[1] + 1), (ball[0] - 1, ball[1])] )  
+                    # now go over the last cells
+                    elif ball[1] == rows_size[ball[0]] and ball[0] != 8:
+                        adjacent_balls.extend([(ball[0], ball[1] - 1),(ball[0] + 1, ball[1]-1), (ball[0] - 1, ball[1] ), (ball[0] - 1, ball[1] + 1) ])
+                    # we need another constraint for the last row where the last ball only has 3 adjacent cells            
+                    elif ball[1] == 8 and ball[0] == 8:
+                        adjacent_balls.extend([(ball[0], ball[1] - 1),(ball[0] - 1, ball[1]), (ball[0] - 1, ball[1] + 1)] )
+                    # now go over the last row other than corners
+                    elif  ball[0] == 0:
+                            adjacent_balls.extend([(ball[0], ball[1] + 1), (ball[0], ball[1] - 1),(ball[0] - 1, ball[1]), (ball[0] - 1, ball[1] + 1) ])  
+                    # now go over all the other cells
+                    else:
+                        adjacent_balls.extend([(ball[0], ball[1] + 1), (ball[0], ball[1] - 1),(ball[0] + 1, ball[1]), (ball[0] + 1, ball[1] - 1), (ball[0] - 1, ball[1]), (ball[0] - 1, ball[1] + 1) ]) 
+
+            elif ball[0] == 4:
+                    # we need another constraint for the middle row where the first ball only has 3 adjacent cells         
+                    if ball[1] == 0:
+                            adjacent_balls.extend([(ball[0], ball[1] + 1),(ball[0] + 1, ball[1]), (ball[0] - 1, ball[1])] )  
+                    elif ball[1] == 8:
+                            adjacent_balls.extend([(ball[0], ball[1] - 1),(ball[0] + 1, ball[1] - 1), (ball[0] - 1, ball[1] - 1)] )  
+                    # all other cells in the middle row:
+                    else:
+                        adjacent_balls.extend([(ball[0], ball[1] + 1), (ball[0], ball[1] - 1),(ball[0] + 1, ball[1]), (ball[0] + 1, ball[1] - 1), (ball[0] - 1, ball[1]), (ball[0] - 1, ball[1] - 1)] ) 
+
+            # now let's check if balls end qualify 
+            if balls_end[i] in adjacent_balls:
+                i += 1
+                continue
+            else:
+                return False 
+        return True
+
     def check_if_push_available(self, balls_start, balls_end):
 
         # if we are pushing with only one ball, return False 
@@ -202,7 +271,11 @@ class Board:
         if not self.check_boundaries(balls_end[0]): 
             print('goes out of index')
             return False
-            
+        
+        if not self.is_adjacent(balls_start, balls_end):
+            print('chosen balls are not adjacent')
+            return False
+        
         print('board is_move_valid true')
         return True
 
