@@ -178,6 +178,19 @@ class GameOpsRL:
             check_move_direction(adjacent_pair[0], -1)
             check_move_direction(adjacent_pair[1], 1)
 
+            # Now I also need to come up with a way to find parallel moves
+            # So we basically need to check the two straight lines that are adjacent to the line the pair is on 
+            # And then on both on those straight lines we need to find two adjacent balls where each of those balls either belongs to 
+            # A straight line that one of the original balls lie on
+
+            def parallel_moves(pair, straight_line):
+
+                # parallel straight line number 1:
+                all_straight_lines = self.game.board.straight_lines
+                first_parallel_line = all_straight_lines[all_straight_lines.index(straight_line) - 1]
+                second_parallel_line = all_straight_lines[all_straight_lines.index(straight_line) - 1]
+
+
         return dict(legitimate_two_ball_moves, player, player_positions, adjacent_cells=None)
 
 
