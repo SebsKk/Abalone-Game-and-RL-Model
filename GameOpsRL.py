@@ -518,7 +518,7 @@ class GameOpsRL:
                     action_details[action_index] = {
                         'start': start_position,
                         'end': end_position,
-                        'type': len(start_position)  # Depending on the number of balls involved
+                        'type': len(start_position) if isinstance(start_position[0], tuple) else 1  # Depending on the number of balls involved
                         
                     }
                     action_space.append(action_index)

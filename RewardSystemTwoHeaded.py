@@ -5,10 +5,11 @@ import itertools
 from GameOpsRL import GameOpsRL
 
 class RewardSystemTwoHeaded:
-    def __init__(self, player1, player2, push_off_reward=100, win_reward=1000, cluster_reward=5, center_move_reward=3,
-                 isolation_reward=5, self_isolation_penalty = -2, threaten_reward=7, exposure_penalty=-3, blocking_penalty=-2, multiple_threat_reward=160, push_reward = 10, 
-                 max_moves = 200, repeated_move_penalty = -3, ball_lost_penalty = -100, ball_pushed_penalty = -10, ball_defesive_cluster_reward = 4, escaped_push_off_reward = 50, 
-                 two_ball_move_reward = 1, three_ball_move_reward = 2, lost_game_penalty = -1000):
+    def __init__(self, player1, player2, push_off_reward=1000, win_reward=10000, cluster_reward=5, center_move_reward=3,
+                 isolation_reward=5, self_isolation_penalty = -5, threaten_reward=7, exposure_penalty=-3, blocking_penalty=-2, multiple_threat_reward=1600, push_reward = 300, 
+                 max_moves = 300, repeated_move_penalty = -3, ball_lost_penalty = -1000, ball_pushed_penalty = -50, ball_defesive_cluster_reward = 4, escaped_push_off_reward = 500, 
+                 two_ball_move_reward = 3, three_ball_move_reward = 6, early_game_one_ball_move_penalty = -20, mid_game_one_ball_move_penalty = -3, late_game_one_ball_move_penalty = 0, 
+                 lost_game_penalty = -1000):
         self.game = GameRL(player1, player2)
         self.game_ops = GameOpsRL(player1, player2)
         self.push_off_reward = push_off_reward
@@ -33,6 +34,9 @@ class RewardSystemTwoHeaded:
         self.lost_game_penalty = lost_game_penalty
         self.two_ball_move_reward = two_ball_move_reward
         self.three_ball_move_reward = three_ball_move_reward
+        self.early_game_one_ball_move_penalty = early_game_one_ball_move_penalty
+        self.mid_game_one_ball_move_penalty = mid_game_one_ball_move_penalty
+        self.late_game_one_ball_move_penalty = late_game_one_ball_move_penalty
 
         self.reward_counters_offensive = {
             'push_off': 0,
@@ -49,7 +53,8 @@ class RewardSystemTwoHeaded:
             'repeated_move': 0,
             'move_count_penalty': 0,
             'two_ball_move':0,
-            'three_ball_move':0
+            'three_ball_move':0,
+            'one_ball_move':0
         }
 
         self.reward_counters_defensive = {
@@ -58,6 +63,11 @@ class RewardSystemTwoHeaded:
             'cluster': 0,
             'lost_game': 0,
             'escaped_push_off': 0
+        }
+
+        self.episode_reward_counters = {
+            'offensive':  self.reward_counters_offensive,
+            'defensive': self.reward_counters_offensive
         }
 
     def calculate_offensive_reward(self, current_state, next_state, balls_start, balls_end):
@@ -73,7 +83,7 @@ class RewardSystemTwoHeaded:
             print(f"Push off reward: +{self.push_off_reward}")
 
         # Reward for moving toward the center of the board
-        if self.is_toward_center(balls_start, balls_end):
+        if self.is_toward_center(balls_start, balls_end, self.game.current_player.color):
             reward += self.center_move_reward
             self.reward_counters_offensive['center_move'] += 1
             print(f"Center move reward: +{self.center_move_reward}")
@@ -126,10 +136,23 @@ class RewardSystemTwoHeaded:
         if isinstance(balls_start[0], tuple):  # Check if it's a multi-ball move
             if len(balls_start) == 2:
                 reward += self.two_ball_move_reward
+                print
                 self.reward_counters_offensive['two_ball_move'] += 1
             elif len(balls_start) == 3:
                 reward += self.three_ball_move_reward
+                print
                 self.reward_counters_offensive['three_ball_move'] += 1
+        else:
+            if self.move_count < 20:  # Early game
+                print(f"Early game one ball move penalty: {self.early_game_one_ball_move_penalty}")
+                reward += self.early_game_one_ball_move_penalty
+            elif self.move_count < 100:  # Mid game
+                reward += self.mid_game_one_ball_move_penalty
+                print(f"Mid game one ball move penalty: {self.mid_game_one_ball_move_penalty}")
+            else:  # Late game
+                reward += self.late_game_one_ball_move_penalty
+                print(f"Late game one ball move penalty: {self.late_game_one_ball_move_penalty}")
+            self.reward_counters_offensive['one_ball_move'] += 1
 
         # Check for winning the game
         if self.is_game_won():
@@ -163,6 +186,8 @@ class RewardSystemTwoHeaded:
             print(f"Move count penalty: {move_count_penalty}")
 
         print(f"Total offensive reward for this move: {reward}")
+        for key, value in self.reward_counters_offensive.items():
+            self.episode_reward_counters['offensive'][key] += value
 
         return reward
     
@@ -176,11 +201,13 @@ class RewardSystemTwoHeaded:
         
         if self.lost_ball(current_state, next_state):
             self.reward_counters_defensive['ball_lost'] += 1
-            return self.ball_lost_penalty
+            reward+= self.ball_lost_penalty
+            print(f"Ball lost reward: +{self.ball_lost_penalty}")
         
         if self.got_ball_pushed(current_state, next_state):
             self.reward_counters_defensive['ball_pushed'] += 1
-            return self.ball_pushed_penalty
+            reward+= self.ball_pushed_penalty
+            print(f"Ball pushed reward: +{self.ball_pushed_penalty}")
         
         if self.is_defensive_cluster_improved(current_state, next_state):  
             reward += self.ball_defensive_cluster_reward
@@ -194,7 +221,19 @@ class RewardSystemTwoHeaded:
         
         print(f'Total defensive reward for this move: {reward}')
 
+        # Update episode counters
+        for key, value in self.reward_counters_defensive.items():
+            self.episode_reward_counters['defensive'][key] += value
+
         return reward
+ 
+    def get_and_reset_episode_counters(self):
+        episode_counters = self.episode_reward_counters.copy()
+        self.episode_reward_counters = {
+            'offensive': {key: 0 for key in self.reward_counters_offensive},
+            'defensive': {key: 0 for key in self.reward_counters_defensive}
+        }
+        return episode_counters
 
     def print_reward_summary(self):
         print("\nReward Summary for this Episode:")
@@ -219,8 +258,9 @@ class RewardSystemTwoHeaded:
             for j in range(len(grid[i])):
                 if grid[i][j] == opponent and next_grid[i][j] != opponent:
                     # Enemy ball was moved
-                    push_penalty += self.ball_pushed_penalty
+                    push_penalty += self.push_reward
         return push_penalty
+    
     
     def escaped_push_off_risk(self, current_state, next_state, balls_start, balls_end):
         grid, player = current_state
@@ -434,14 +474,35 @@ class RewardSystemTwoHeaded:
         # Check if the number of opponent's marbles has decreased
         return opponent_marbles_next < opponent_marbles_current
 
-    def is_toward_center(self, balls_start, balls_end, center = [4,4]):
+    def is_toward_center(self, balls_start, balls_end, player_color):
         
-        # We must first set up some sort of a center to move towards
-        # I think the center will be the middle cell of the middle row and the distance will be calculated from there 
+        if player_color == -1:  
+            offensive_targets = [(0, 2), (1, 2), (2, 3)]  # Top side center
+        else:
+            offensive_targets = [(6, 3), (7, 2), (8, 2)]  # Bottom side center
+
+        center = [4, 4]
+        
+        total_score = 0
         for start, end in zip(balls_start, balls_end):
-            if np.linalg.norm(np.array(end) - np.array(center)) < np.linalg.norm(np.array(start) - np.array(center)):
-                return True
-        return False
+            # Score for moving towards the center
+            center_score = np.linalg.norm(np.array(start) - np.array(center)) - np.linalg.norm(np.array(end) - np.array(center))
+            
+            # Score for moving towards offensive targets
+            offensive_score = 0
+            for target in offensive_targets:
+                offensive_score += np.linalg.norm(np.array(start) - np.array(target)) - np.linalg.norm(np.array(end) - np.array(target))
+            
+            # Weight offensive score higher
+            total_score += center_score + 2 * offensive_score
+            
+            # Bonus for reaching key positions
+            if end in offensive_targets:
+                total_score += 5
+            elif end[0] in [0, 1, 2] if player_color == 1 else [6, 7, 8]:
+                total_score += 3  # Bonus for reaching opponent's side
+        
+        return total_score > 0
 
     def is_cluster_improved(self, current_state, next_state):
         

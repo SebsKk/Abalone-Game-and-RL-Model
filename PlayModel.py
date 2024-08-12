@@ -295,6 +295,7 @@ class GameUI:
                         state, move_valid, done = self.game.step(action)
                     else:  # AI turn
                         action_space, action_details, action_mask = self.game.get_action_space()
+                        print(f' action details: {action_details}')
                         transformed_state = dqn_model.transform_state_for_nn(state)
                         action, _ = dqn_model.choose_action(transformed_state, 0, action_space, action_mask, action_details)
                         state, move_valid, done = self.game.step(action)
@@ -314,6 +315,7 @@ if __name__ == "__main__":
     import torch
     from DQN import DQN
     from TwoHeadedDQN import TwoHeadedDQN
+    from TwoHeadedDoubleDQN import TwoHeadedDoubleDQN
     from GameOpsRL import GameOpsRL
     from Player import Player
 
@@ -321,9 +323,9 @@ if __name__ == "__main__":
     player2 = Player("White", -1)
     game_ops_rl = GameOpsRL(player1, player2)
     # dqn_model = DQN(243, 140, game_ops_rl)
-    dqn_model = TwoHeadedDQN(243, 140, game_ops_rl)
+    dqn_model = TwoHeadedDoubleDQN(243, 140, game_ops_rl)
 
-    model_path = r"C:\Users\kaczm\Desktop\Abalone Project\Abalone in progress\models_deepq\20240804_190746\final_two_headed_dqn_model.pth"
+    model_path = r"C:\Users\kaczm\Desktop\Abalone Project\Abalone in progress\models_deepq\20240808_182119\final_two_headed_dqn_model.pth"
     dqn_model.load_state_dict(torch.load(model_path))
     dqn_model.eval()
 

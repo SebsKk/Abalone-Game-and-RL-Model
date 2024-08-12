@@ -2,18 +2,17 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
-from RewardSystem import RewardSystem
-from GameOpsRL import GameOpsRL    
 import torch.nn.functional as F
+import copy
 
-class TwoHeadedDQN(nn.Module):
+class TwoHeadedDoubleDQN(nn.Module):
     def __init__(self, input_dim, output_dim, environment):
-        super(TwoHeadedDQN, self).__init__()
+        super(TwoHeadedDoubleDQN, self).__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.gameopsrl = environment
 
-        # Shared layers
+        # Online network
         self.shared_network = nn.Sequential(
             nn.Linear(input_dim, 512),
             nn.ReLU(),
@@ -24,8 +23,6 @@ class TwoHeadedDQN(nn.Module):
             nn.Linear(256, 256),
             nn.ReLU()
         )
-
-        # Offensive head
         self.offensive_head = nn.Sequential(
             nn.Linear(256, 256),
             nn.ReLU(),
@@ -33,8 +30,6 @@ class TwoHeadedDQN(nn.Module):
             nn.ReLU(),
             nn.Linear(128, output_dim)
         )
-
-        # Defensive head
         self.defensive_head = nn.Sequential(
             nn.Linear(256, 256),
             nn.ReLU(),
@@ -43,13 +38,22 @@ class TwoHeadedDQN(nn.Module):
             nn.Linear(128, output_dim)
         )
 
+        # Target network
+        self.target_shared_network = copy.deepcopy(self.shared_network)
+        self.target_offensive_head = copy.deepcopy(self.offensive_head)
+        self.target_defensive_head = copy.deepcopy(self.defensive_head)
+
         self.optimizer = optim.Adam(self.parameters(), lr=0.0005)
 
-    
-    def forward(self, x):
-        shared_features = self.shared_network(x)
-        offensive_q = self.offensive_head(shared_features)
-        defensive_q = self.defensive_head(shared_features)
+    def forward(self, x, target=False):
+        if not target:
+            shared_features = self.shared_network(x)
+            offensive_q = self.offensive_head(shared_features)
+            defensive_q = self.defensive_head(shared_features)
+        else:
+            shared_features = self.target_shared_network(x)
+            offensive_q = self.target_offensive_head(shared_features)
+            defensive_q = self.target_defensive_head(shared_features)
         return offensive_q, defensive_q
 
     def choose_action(self, state, epsilon, action_space, action_mask, action_details):
@@ -145,45 +149,69 @@ class TwoHeadedDQN(nn.Module):
 
         # Convert to numpy array to ensure it can be processed by PyTorch
         return np.array(one_hot_encoded_grid, dtype=float)
-    
+
     def update(self, state, action, offensive_reward, defensive_reward, next_state, action_mask, next_action_mask, done):
         state = torch.tensor(state, dtype=torch.float32).unsqueeze(0)
         next_state = torch.tensor(next_state, dtype=torch.float32).unsqueeze(0)
         action = action.clone().detach() if isinstance(action, torch.Tensor) else torch.tensor(action, dtype=torch.long)
         offensive_reward = torch.tensor([offensive_reward], dtype=torch.float32)
         defensive_reward = torch.tensor([defensive_reward], dtype=torch.float32)
+        done = torch.tensor([done], dtype=torch.float32)
         action_mask = torch.tensor(action_mask, dtype=torch.bool)
         next_action_mask = torch.tensor(next_action_mask, dtype=torch.bool)
-
+        
+        # Pad action masks if necessary
         if action_mask.shape[0] != self.output_dim:
             action_mask = F.pad(action_mask, (0, self.output_dim - action_mask.shape[0]), value=False)
         if next_action_mask.shape[0] != self.output_dim:
             next_action_mask = F.pad(next_action_mask, (0, self.output_dim - next_action_mask.shape[0]), value=False)
+        
+        action_mask = torch.tensor(action_mask, dtype=torch.bool).unsqueeze(0)
+        next_action_mask = torch.tensor(next_action_mask, dtype=torch.bool).unsqueeze(0)
 
+        # Get current Q values
         current_offensive_q, current_defensive_q = self(state)
         current_offensive_q = current_offensive_q.squeeze(0)
         current_defensive_q = current_defensive_q.squeeze(0)
 
+
+        # Compute target Q values
         with torch.no_grad():
+            # Use online network for action selection
             next_offensive_q, next_defensive_q = self(next_state)
-            next_offensive_q = next_offensive_q.squeeze(0)
-            next_defensive_q = next_defensive_q.squeeze(0)
             next_offensive_q[~next_action_mask] = float('-inf')
             next_defensive_q[~next_action_mask] = float('-inf')
-            max_next_offensive_q = next_offensive_q.max()
-            max_next_defensive_q = next_defensive_q.max()
+            best_offensive_actions = next_offensive_q.argmax(dim=1, keepdim=True)
+            best_defensive_actions = next_defensive_q.argmax(dim=1, keepdim=True)
 
-        target_offensive_q = offensive_reward + (1 - done) * 0.99 * max_next_offensive_q
-        target_defensive_q = defensive_reward + (1 - done) * 0.99 * max_next_defensive_q
+            # Use target network for value estimation
+            next_offensive_q_target, next_defensive_q_target = self(next_state, target=True)
+            max_next_offensive_q = next_offensive_q_target.gather(1, best_offensive_actions).squeeze(1)
+            max_next_defensive_q = next_defensive_q_target.gather(1, best_defensive_actions).squeeze(1)
 
-        loss_offensive = nn.functional.mse_loss(current_offensive_q[action].unsqueeze(0), target_offensive_q)
-        loss_defensive = nn.functional.mse_loss(current_defensive_q[action].unsqueeze(0), target_defensive_q)
+            target_offensive_q = offensive_reward + (1 - done) * 0.99 * max_next_offensive_q
+            target_defensive_q = defensive_reward + (1 - done) * 0.99 * max_next_defensive_q
+
+        # Compute loss
+        loss_offensive = F.mse_loss(current_offensive_q, target_offensive_q)
+        loss_defensive = F.mse_loss(current_defensive_q, target_defensive_q)
         total_loss = loss_offensive + loss_defensive
 
+        # Optimize the model
         self.optimizer.zero_grad()
         total_loss.backward()
         self.optimizer.step()
 
+        return total_loss.item()
+
+    def update_target_network(self, tau=0.001):
+        """Soft update of the target network."""
+        for target_param, online_param in zip(self.target_shared_network.parameters(), self.shared_network.parameters()):
+            target_param.data.copy_(tau * online_param.data + (1.0 - tau) * target_param.data)
+        for target_param, online_param in zip(self.target_offensive_head.parameters(), self.offensive_head.parameters()):
+            target_param.data.copy_(tau * online_param.data + (1.0 - tau) * target_param.data)
+        for target_param, online_param in zip(self.target_defensive_head.parameters(), self.defensive_head.parameters()):
+            target_param.data.copy_(tau * online_param.data + (1.0 - tau) * target_param.data)
 
     def action_to_index(self, action):
         

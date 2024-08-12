@@ -1,4 +1,4 @@
-from TwoHeadedDQN import TwoHeadedDQN
+from TwoHeadedDoubleDQN import TwoHeadedDoubleDQN
 from RewardSystemTwoHeaded import RewardSystemTwoHeaded
 from Player import Player
 from GameOpsRL import GameOpsRL
@@ -10,6 +10,7 @@ import json
 from datetime import datetime
 from CurriculumLearning import CurriculumLearning
 from RewardSystemTwoHeadedSimplified import RewardSystemTwoHeadedSimplified
+from AnalysisTool import AnalysisTool
 
 
 def train_dqn(num_episodes, environment, dqn_model, reward_system, curriculum, epsilon_start=1.0, epsilon_decay=0.9998, epsilon_min=0.03, reward_save_interval=40, model_save_interval=100, last_saved_episode=0):
@@ -22,6 +23,9 @@ def train_dqn(num_episodes, environment, dqn_model, reward_system, curriculum, e
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     save_dir = f"C:/Users/kaczm/Desktop/Abalone Project/Abalone in progress/models_deepq/{timestamp}"
     os.makedirs(save_dir, exist_ok=True)
+
+    #analysis_tool = AnalysisTool(dqn_model)
+    #analysis_tool.set_save_directory(save_dir)
 
     for episode in range(num_episodes):
         environment.reset()
@@ -63,9 +67,27 @@ def train_dqn(num_episodes, environment, dqn_model, reward_system, curriculum, e
             
             next_action_space, next_action_details, next_action_mask = environment.get_action_space()
             
+            #analysis_tool.record_state_action_value(state, encoded_action, offensive_reward, defensive_reward)
             dqn_model.update(transformed_state, encoded_action, offensive_reward, defensive_reward, transformed_next_state, action_mask, next_action_mask, done)
             
             print(f'DQN update done for episode {episode+1}')
+            if episode % 100 == 0:  
+                dqn_model.update_target_network()
+                '''# Perform analysis at the end of the episode
+                action_space, action_details, action_mask = environment.get_action_space()
+                
+                # Explain Q-value for the chosen action
+                explanation = analysis_tool.explain_q_value(state, encoded_action, episode)
+                
+                # Compute and save saliency map
+                saliency_map = analysis_tool.compute_saliency_map(state, encoded_action, episode)
+                
+                # Compare top actions
+                top_actions = action_space[:5]  # Assume action_space is sorted
+                comparisons = analysis_tool.compare_actions(state, top_actions, episode)
+                
+                # Plot Q-value distribution
+                analysis_tool.plot_q_value_distribution(state, action_details, episode)'''
 
             state = next_state
         
@@ -95,6 +117,8 @@ def train_dqn(num_episodes, environment, dqn_model, reward_system, curriculum, e
     torch.save(dqn_model.state_dict(), final_model_path)
     save_rewards_and_actions(save_dir, num_episodes, results, epsilon, action_history, last_saved_episode)
 
+    #top_state_actions = analysis_tool.get_top_state_actions()
+    #analysis_tool.save_final_analysis()
     print(f"Training completed. Final results and model saved in {save_dir}")
     return results, action_history, episode_reward_counters
 
@@ -223,9 +247,9 @@ if __name__ == "__main__":
     game_ops_rl = GameOpsRL(player1, player2, initial_difficulty['max_moves'])
     game_ops_rl.game.board = curriculum.adjust_board(game_ops_rl.game.board)
     
-    dqn_model = TwoHeadedDQN(243, 140, game_ops_rl)
+    dqn_model = TwoHeadedDoubleDQN(243, 140, game_ops_rl)
     # reward_system = RewardSystemTwoHeaded(player1, player2)
     
     reward_system = RewardSystemTwoHeadedSimplified(player1, player2)
 
-    results, action_history, episode_reward_counters = train_dqn(4000, game_ops_rl, dqn_model, reward_system, curriculum)
+    results, action_history, episode_reward_counters = train_dqn(1000, game_ops_rl, dqn_model, reward_system, curriculum)
