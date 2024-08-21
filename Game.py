@@ -17,8 +17,8 @@ class Game:
                 straight_line = line
 
         if straight_line.index(balls_end[0]) >= len(straight_line) - 2 or straight_line.index(balls_end[0]) <= 1:
+            print(f'updating score for {self.current_player.name}')
             self.current_player.update_score(1)
-            print(self.current_player.score)
             return True
         return False
 
@@ -42,11 +42,11 @@ class Game:
     def make_move(self, balls_start, balls_end):
         # If the move is valid, perform the move and switch players
         # Display the board before making the move
-        print("Board Before Move:")
+        #print("Board Before Move:")
         self.board.display_board()
 
         if self.board.get_cell(balls_start[0][0], balls_start[0][1]) != self.current_player.color:
-            print(f"It's {self.current_player.name}'s turn!")
+            #print(f"It's {self.current_player.name}'s turn!")
             return False
         
         # If the move is valid, perform the move and switch players
