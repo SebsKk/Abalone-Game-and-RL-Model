@@ -14,17 +14,16 @@ class TestActionSpace(unittest.TestCase):
         self.game = GameRL(self.player1, self.player2)
         self.game_ops = GameOpsRL(self.player1, self.player2)
 
-        self.test_grid = [
-            [1,0,0,0,1],
-            [1,1,1,1,0,0],
-            [0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0],
-            [0,-1,-1,-1,-1,0],
-            [-1,-1,0,0,0],
-        ]
+        self.test_grid = [[1, 0, 0, 0, 1], 
+         [1, 0, 0, 1, 1, 1], 
+         [0, 1, 0, 1, 0, 0, 0], 
+         [0, 1, 1, 0, 1, 1, 0, 0], 
+         [0, 0, 1, -1, 1, 0, 0, 0, 0], 
+         [0, -1, 0, -1, 0, 0, 0, 0], 
+         [-1, 0, 0, -1, 0, -1, -1], 
+         [-1, -1, -1, 0, 0, -1], 
+         [-1, -1, 0, 0, -1]]
+        
         self.game.board.grid = self.test_grid
         self.game_ops.game.board.grid = self.test_grid
 

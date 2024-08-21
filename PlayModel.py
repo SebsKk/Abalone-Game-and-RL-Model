@@ -325,7 +325,7 @@ if __name__ == "__main__":
     # dqn_model = DQN(243, 140, game_ops_rl)
     dqn_model = TwoHeadedDoubleDQN(243, 140, game_ops_rl)
 
-    model_path = r"C:\Users\kaczm\Desktop\Abalone Project\Abalone in progress\models_deepq\20240808_182119\final_two_headed_dqn_model.pth"
+    model_path = r"C:\Users\kaczm\Desktop\Abalone Project\Abalone in progress\models_deepq\20240812_182119\final_two_headed_dqn_model.pth"
     dqn_model.load_state_dict(torch.load(model_path))
     dqn_model.eval()
 

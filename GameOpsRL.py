@@ -18,6 +18,8 @@ class GameOpsRL:
         return self.get_current_state()
 
     def step(self, action):
+
+
         balls_start = action['start']
         balls_end = action['end']
         move_type = action['type']
@@ -26,6 +28,7 @@ class GameOpsRL:
             balls_start, balls_end = self.sort_balls(balls_start, balls_end)
 
         if self.make_move(balls_start, balls_end) is False:
+            print(f'Invalid move: {balls_start} to {balls_end}')
             # Return the current state unchanged and False for both state change and done
             return self.get_current_state(), False, False
 
@@ -35,12 +38,42 @@ class GameOpsRL:
         # Return the new state, True for successful move, and done status
         return self.get_current_state(), True, done
     
+    def simulate_step(self, state, action):
+        # Create a deep copy of the current game state
+        temp_game = copy.deepcopy(self.game)
+        temp_game_ops = copy.deepcopy(self)
+        temp_game_ops.game = temp_game
+
+        balls_start = action['start']
+        balls_end = action['end']
+        move_type = action['type']
+
+        if isinstance(balls_start[0], tuple):
+            balls_start, balls_end = temp_game_ops.sort_balls(balls_start, balls_end)
+
+        # Simulate the move on the temporary game state
+        if temp_game_ops.make_move(balls_start, balls_end) is False:
+            # Return the current state unchanged and False for both state change and done
+            return state, False, False
+
+        # Check if the game is over in the simulated state
+        done = temp_game_ops.is_game_over()
+
+        # Get the new state from the temporary game
+        new_state = temp_game_ops.get_current_state()
+
+        # Return the new state, True for successful move, and done status
+        return new_state, True, done
+    
     def find_player_balls(self, board, player):
  
         player_positions = []
+
+        #print(f'the board is {board}, player is {player}')
         for row_index, row in enumerate(board):
             for col_index, cell in enumerate(row):
                 if cell == player:
+                    #print(f'found a player at {row_index, col_index}')
                     player_positions.append((row_index, col_index))
         return player_positions
 
@@ -60,7 +93,7 @@ class GameOpsRL:
                     elif col_n == 0 and index == 0:
                         adjacent_cells.extend([(index, col_n + 1), (index + 1, col_n), (index + 1, col_n + 1)])     
                     elif col_n == rows_size[index] and index != 0:
-                        adjacent_cells.extend([(index, col_n - 1), (index + 1, col_n), (index - 1, col_n - 1), (index + 1, col_n - 1)])
+                        adjacent_cells.extend([(index, col_n - 1), (index + 1, col_n), (index - 1, col_n - 1), (index + 1, col_n + 1)])
                     elif col_n == 4 and index == 0:
                         adjacent_cells.extend([(index, col_n - 1), (index + 1, col_n), (index + 1, col_n + 1)])
                     elif index == 0:
@@ -416,7 +449,7 @@ class GameOpsRL:
                 adjacent_cells = []
                 cell1, cell2, cell3 = trio
 
-                print(f'Trio: {trio}')
+                # print(f'Trio: {trio}')
                 
                 for adj_cell in self.adjacent_cells_dict[cell2]:
                     if adj_cell in self.adjacent_cells_dict[cell1] or adj_cell in self.adjacent_cells_dict[cell3]:
@@ -497,15 +530,16 @@ class GameOpsRL:
 
         # Search for all current player's ball positions
 
-        print(f' current player check in get action space: {self.game.current_player.color}')
+
         curr_player_ball_positions = self.find_player_balls(self.game.board.grid, self.game.current_player.color)
 
-        # print(f'Current player ball positions: {curr_player_ball_positions}')
+        #print(f'Current player ball positions: {curr_player_ball_positions}')
+        #print(f'Current player: {self.game.current_player.color}, board: {self.game.board.grid}')
 
         # Get all legitimate moves for one, two, and three balls
         one_ball_moves = self.get_legitimate_one_ball_moves(curr_player_ball_positions)
 
-        print(f' current player : {self.game.current_player.color}, curr player ball positions: {curr_player_ball_positions}')
+        # print(f' current player : {self.game.current_player.color}, curr player ball positions: {curr_player_ball_positions}, curr player score: {self.game.current_player.score}')
         two_balls_moves = self.get_legitimate_two_balls_moves(self.game.current_player.color, curr_player_ball_positions)
         three_balls_moves = self.get_legitimate_three_balls_moves(self.game.current_player.color, curr_player_ball_positions)
 
@@ -536,24 +570,31 @@ class GameOpsRL:
     def get_current_state(self):
         """Return a deep copy of the current state of the board."""
         current_state = copy.deepcopy(self.game.board.grid)
-        current_player = [self.game.current_player.color]  # This is already a new list, so no need for deepcopy
+        current_player = [self.game.current_player.color]  
         return current_state, current_player
 
     def make_move(self, balls_start, balls_end):
         """Attempt to make a move and return if the move was successful."""
 
-        print(f'Making move from {balls_start} to {balls_end}')
+        #print(f'Making move from {balls_start} to {balls_end}')
         return self.game.make_move(balls_start, balls_end)
 
     def is_game_over(self):
         """Check if the game is over."""
-        return any(player.score == 6 for player in self.game.players)
+        for player in self.game.players:
+            if player.score == 6:
+                print(f"Game over! Player {player.color} has won by reaching 6 points.")
+                return True
+        
+    
+        return False
 
     def get_winner(self):
         """Return the player who has won the game or None if there's no winner yet."""
         for player in self.game.players:
             if player.score == 6:
                 return player
+
         return None
     
     def sort_balls(self, balls_start, balls_end):

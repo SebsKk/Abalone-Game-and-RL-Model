@@ -121,7 +121,7 @@ class Board:
 
         all_adjacent_balls = []
         i = 0
-        print(f'balls start {balls_start}, balls end {balls_end}')
+        # print(f'balls start {balls_start}, balls end {balls_end}')
         for ball in balls_start:
             # print(rows_size[ball[0]], ball[1])
             adjacent_balls = []
@@ -224,14 +224,14 @@ class Board:
                 break
             if player_code == player_code_start:  
                 # Same color as our balls
-                print('ally ball on the line')
+                # print('ally ball on the line')
                 return False
             if player_code != player_code_start:  # Enemy ball
                 enemy_ball_count += 1
 
         # Check the conditions
         if enemy_ball_count >= 3 or enemy_ball_count > len(balls_start):
-            print('more than 3 balls in line or not pushing with enough balls')
+
             return False
         return True
 
@@ -263,17 +263,14 @@ class Board:
             
             # Check if the move is parallel
         if self.check_parallel(balls_start, balls_end):
-            print('parallel move')
+            #print('parallel move')
             for ball in balls_end:
                 if self.get_cell(ball[0], ball[1]) != 0:
-                    print('cant push on parallel move')
                     return False
         else:  # not parallel
             #print('not parallel move')
             if self.get_cell(balls_end[0][0], balls_end[0][1]) != 0:
-                print('trying to push ball')
                 if not self.check_if_push_available(balls_start, balls_end):
-                    print('push not available')
                     return False
                     
             # also check if the first ball goes out of the index
@@ -285,7 +282,7 @@ class Board:
             #print('chosen balls are not adjacent')
             return False
         
-        print('board is_move_valid true')
+
         return True
     
     def create_adjacent_pairs_to_straight_lines(self, straight_lines):

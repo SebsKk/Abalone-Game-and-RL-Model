@@ -10,6 +10,8 @@ class GameRL:
         self.current_player = player1 if player1.color == -1 else player2
 
     def check_if_ball_pushed_off(self, balls_start, balls_end):
+
+        #print('checking for ball push off')
         if len(balls_start) == 1:
             return False
 
@@ -76,7 +78,7 @@ class GameRL:
         for line in all_straight_lines:
             if set(balls_end).issubset(set(line)):
                 straight_line = line
-                print(f'Straight line: {straight_line} the balls are being pushed on')
+                #print(f'Straight line: {straight_line} the balls are being pushed on')
                 
                 direction = 1 if line.index(balls_end[0]) > line.index(balls_start[0]) else -1
                 
@@ -87,18 +89,18 @@ class GameRL:
                 current_index = first_end_index
 
 
-                print(f'Appnding ball {line[current_index + direction ]}')
+                #print(f'Appending ball {line[current_index + direction ]}')
                 pushed_balls.append(line[current_index + direction])
 
                 current_index += direction
-                print(f'next ball is {self.board.get_cell(line[current_index][0], line[current_index][1])}')
+                #print(f'next ball is {self.board.get_cell(line[current_index][0], line[current_index][1])}')
                 if self.board.get_cell(line[current_index][0], line[current_index][1]) == self.current_player.color*-1:
-                    print('more than one ball is being pushed')
-                    print(f'Appending ball {line[current_index + direction]}')
+                    #rint('more than one ball is being pushed')
+                    #print(f'Appending ball {line[current_index + direction]}')
                     pushed_balls.append(line[current_index + direction])
 
 
-        print(f'Pushed balls: {pushed_balls}')
+        # print(f'Pushed balls: {pushed_balls}')
 
         for ball in pushed_balls:
             self.board.set_cell(ball[0], ball[1], self.current_player.color*-1)
@@ -114,16 +116,16 @@ class GameRL:
             balls_start = [balls_start]
             balls_end = [balls_end]
 
-        print(f'first moving ball: {balls_start[0]}')
+        #print(f'first moving ball: {balls_start[0]}')
         if self.board.get_cell(balls_start[0][0], balls_start[0][1]) != self.current_player.color:
-            print('Invalid move: Ball does not belong to current player')
-            print(f'Current player: {self.current_player.color}')
-            print(f'cell belongs to     : {self.board.get_cell(balls_start[0][0], balls_start[0][1])}')
+            #print('Invalid move: Ball does not belong to current player')
+            #print(f'Current player: {self.current_player.color}')
+            #print(f'cell belongs to     : {self.board.get_cell(balls_start[0][0], balls_start[0][1])}')
             return False
         
         # If the move is valid, perform the move and switch players
         if self.board.is_move_valid(balls_start, balls_end) is True:
-            print('Move is valid')
+            #print('Move is valid')
             player_color = self.board.get_cell(balls_start[0][0],balls_start[0][1])
         
             if self.board.check_parallel(balls_start, balls_end) is True:
@@ -136,7 +138,7 @@ class GameRL:
                 if self.board.get_cell(balls_end[0][0], balls_end[0][1]) != 0:
                     if not self.check_if_ball_pushed_off(balls_start, balls_end):
                         # set the cell the enemy ball was pushed to with the enemy player's color
-                        print('Updating pushed ball color')
+                        # print('Updating pushed ball color')
                         self.update_pushed_ball_color(balls_start, balls_end)
                 # Move the balls
                 for i in range(len(balls_start)):
@@ -145,15 +147,19 @@ class GameRL:
 
             self.switch_player()
 
-            print('Player switched')
+            # print('Player switched')
             return True
-        else: 
+        '''else: 
+            print(f' move is {balls_start} to {balls_end}')
+            print(f'current game board is {self.board.grid}')
             print('Move is invalid')
-            return False
+            raise ValueError("An invalid move was detected. Stopping execution.")
+            return False'''
         
     def switch_player(self):
         # Switches the current player to the other player
         self.current_player = self.players[0] if self.current_player == self.players[1] else self.players[1]
+
 
         
     def initialize_game(self):

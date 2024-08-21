@@ -7,5 +7,8 @@ class Player:
         self.score = 0
     
     def update_score(self, point):
+
+        print(f'updating score for {self.name}')
+        print(f'current player score: {self.score}')
         self.score += point
 

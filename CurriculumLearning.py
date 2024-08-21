@@ -74,6 +74,8 @@ class CurriculumLearning:
         max_moves = current_difficulty['max_moves']
 
         # Check if any player has reached the win condition
+
+        print(f'player scores are {[(player.color, player.score) for player in environment.game.players]}, win condition is {win_condition}')
         if any(player.score >= win_condition for player in environment.game.players):
             return True
 

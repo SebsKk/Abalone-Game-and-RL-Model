@@ -252,4 +252,4 @@ if __name__ == "__main__":
     
     reward_system = RewardSystemTwoHeadedSimplified(player1, player2)
 
-    results, action_history, episode_reward_counters = train_dqn(1000, game_ops_rl, dqn_model, reward_system, curriculum)
+    results, action_history, episode_reward_counters = train_dqn(1, game_ops_rl, dqn_model, reward_system, curriculum)

@@ -13,9 +13,9 @@ class RewardSystemTwoHeadedSimplified:
         self.win_reward = 10000
         self.push_off_reward = 3000
         self.push_enemy_reward = 700
-        self.ball_pushed_penalty = -200
-        self.ball_lost_penalty = -800
-        self.escaped_push_off_reward = 300
+        self.ball_pushed_penalty = -300
+        self.ball_lost_penalty = -2000
+        self.escaped_push_off_reward = 500
         self.one_ball_move_penalty = -10
         self.two_ball_move_reward = 15
         self.three_ball_move_reward = 45
