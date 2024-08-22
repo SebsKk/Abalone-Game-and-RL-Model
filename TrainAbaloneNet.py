@@ -39,6 +39,7 @@ def train_abalone_mcts(num_episodes, environment, model, n_mcts=300, c_puct=5, t
         while True:
             state = environment.get_current_state()
             action_space, action_details, action_mask = environment.get_action_space()
+
             print(f'\nMove {move_counter + 1}:')
             print(f'Current player: {environment.game.current_player.color}')
             print(f'Action space size: {len(action_space)}')
@@ -154,7 +155,6 @@ def train_abalone_mcts(num_episodes, environment, model, n_mcts=300, c_puct=5, t
 
 def select_action(acts, probs, action_details):
 
-    print(f'acts in select action: {acts} ')
     print(f'probs in select action: {probs} ')
     if not acts:
         print("No actions available. Returning None.")
@@ -242,7 +242,7 @@ if __name__ == "__main__":
     game_ops_rl = GameOpsRL(player1, player2, 400)
     
     input_dim = 243  # 9x9x3 for the board representation
-    output_dim = 140 
+    output_dim = 1684 
     
     model = AbaloneNet(input_dim, output_dim, game_ops_rl)
     

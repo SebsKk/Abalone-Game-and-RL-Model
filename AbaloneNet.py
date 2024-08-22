@@ -102,9 +102,7 @@ class AbaloneNet(nn.Module):
     def train(self, states, mcts_probs, winners):
         states_tensor = torch.tensor([self.transform_state_for_nn(state) for state in states], dtype=torch.float32)
         
-        # Pad mcts_probs to length 140
-        padded_mcts_probs = [np.pad(probs, (0, 140 - len(probs)), 'constant') for probs in mcts_probs]
-        mcts_probs_tensor = torch.tensor(padded_mcts_probs, dtype=torch.float32)
+        mcts_probs_tensor = torch.tensor(mcts_probs, dtype=torch.float32)
         
         winners_tensor = torch.tensor(winners, dtype=torch.float32).unsqueeze(1)
 
@@ -221,23 +219,19 @@ class MCTS:
             path.append((action_tuple, node))
             state, reward, done = self.game_ops.step(action_dict)
             
-            #print(f"Depth {depth}: Action {action_tuple} taken. New state: {state}")
             
             depth += 1
             
             if done:
-                #print(f'Game over detected at depth {depth}. Final state: {state}')
                 break
 
-        #if depth == max_depth:
-            #print(f'Max depth {max_depth} reached. Terminating playout.')
 
         action_probs, leaf_value = self.policy(state)
 
         #print(f'Action probs: {action_probs}, Leaf value: {leaf_value}')
         if not self.game_ops.is_game_over():
             action_space, action_details, _ = self.game_ops.get_action_space()
-            action_details_list = list(action_details.values()) if isinstance(action_details, dict) else action_details
+            action_details_list = list(action_details.values()) 
             node.expand(action_probs, action_details_list)
             #print(f"Expanded leaf node with {len(node.children)} children")
 
@@ -349,19 +343,17 @@ class MCTS:
                     child_key[1] == action_detail['end'] and 
                     child_key[2] == action_detail['type'])
 
-        #for action, node in self.root.children.items():
-            #print(f"Action: {action}, Node visits: {node.n_visits}")
 
         # Get visit counts for each action from the MCTS tree
         act_visits = []
+        print(f'action details to be checked: {action_details}')
         for act, node in self.root.children.items():
-            #print(f"Root child: {act}, Visits: {node.n_visits}")
+            print(f"Root child: {act}, Visits: {node.n_visits}")
             for idx, action in action_details.items():
                 if compare_actions(act, action):
-                    #print(f"Matched action: {action}, Visits: {node.n_visits}")
+                    print(f"Matched action: {action}, Visits: {node.n_visits}")
                     act_visits.append((idx, node.n_visits))
-
-        #print(f'Action visits in get_move_probs: {act_visits}')  # Debug
+        #print(f'act_visits: {act_visits}')
         if not act_visits:
             #print('No valid actions found in MCTS tree. Returning uniform distribution.')
             return [action_details[act] for act in action_space], np.ones(len(action_space)) / len(action_space)
@@ -398,12 +390,9 @@ class MCTS:
                 final_acts.append(action_details[act])
                 final_probs.append(1e-8)
 
-        # Normalize probabilities
-        padded_acts = final_acts + [None] * (140 - len(final_acts))
-        padded_probs = np.pad(final_probs, (0, 140 - len(final_probs)), 'constant')
+        
 
-        print(f'Padded acts: {padded_acts}, Padded probs: {padded_probs}')
-        return padded_acts, padded_probs
+        return final_acts, final_probs
         
     @staticmethod
     def _softmax(x):
@@ -418,3 +407,7 @@ class MCTS:
             self.root.parent = None
         else:
             self.root = MCTSNode(None, 1.0)
+
+        action_space, action_details, _ = self.game_ops.get_action_space()
+        action_probs, _ = self.policy(self.game_ops.get_current_state())
+        self.root.expand(action_probs, list(action_details.values()))
