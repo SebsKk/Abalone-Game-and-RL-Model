@@ -549,9 +549,9 @@ class GameOpsRL:
                     action_details[proper_index] = action
                     action_space.append(proper_index)
                     action_mask.append(True)
-                    break
                     
-                   
+                    
+                
 
         if len(action_mask) < len(self.all_actions):
             action_mask.extend([False] * (len(self.all_actions) - len(action_mask)))

@@ -242,7 +242,7 @@ if __name__ == "__main__":
     game_ops_rl = GameOpsRL(player1, player2, 400)
     
     input_dim = 243  # 9x9x3 for the board representation
-    output_dim = 1684 
+    output_dim = 1686
     
     model = AbaloneNet(input_dim, output_dim, game_ops_rl)
     

@@ -328,35 +328,41 @@ class MCTS:
             player.score = original_scores[i]
             player.color = original_colors[i] # Restore each player's color after playouts
 
-        # Decay epsilon (if applicable in your algorithm)
+        # Decay epsilon 
         self.epsilon = max(self.min_epsilon, self.epsilon * self.epsilon_decay)
         #print(f'current game state after restoring is {self.game_ops.get_current_state()}')
         # Get the action space and details to match the move probabilities
         action_space, action_details, _ = self.game_ops.get_action_space()
-        
+
         #visit_dict = self.collect_visits(self.root, action_details=action_details)
 
         #print("Move visits: ", visit_dict)
 
         def compare_actions(child_key, action_detail):
-            return (child_key[0] == action_detail['start'] and 
-                    child_key[1] == action_detail['end'] and 
-                    child_key[2] == action_detail['type'])
+
+            return (child_key[0] == action_detail[0] and 
+                    child_key[1] == action_detail[1] and 
+                    child_key[2] == action_detail[2])
 
 
         # Get visit counts for each action from the MCTS tree
         act_visits = []
-        print(f'action details to be checked: {action_details}')
-        for act, node in self.root.children.items():
-            print(f"Root child: {act}, Visits: {node.n_visits}")
-            for idx, action in action_details.items():
-                if compare_actions(act, action):
-                    print(f"Matched action: {action}, Visits: {node.n_visits}")
+
+        #print(f'action details to be checked: {action_details}')
+        for action, idx in self.game_ops.all_actions.items():
+            if action in self.root.children.keys():
+
+                node = self.root.children[action]
+                if node.n_visits > 0:
+
                     act_visits.append((idx, node.n_visits))
-        #print(f'act_visits: {act_visits}')
+            else:
+                act_visits.append((idx, 0))
+
+
         if not act_visits:
-            #print('No valid actions found in MCTS tree. Returning uniform distribution.')
-            return [action_details[act] for act in action_space], np.ones(len(action_space)) / len(action_space)
+            print('No valid actions found in MCTS tree. Returning uniform distribution.')
+            return [self.game_ops.all_actions[act] for act in self.game_ops.all_actions.items()], np.ones(1684) / 1684
 
         acts, visits = zip(*act_visits)
         visits = np.array(visits, dtype=np.float64)
@@ -373,27 +379,20 @@ class MCTS:
             exp_logits = np.exp(logits)
             probs = exp_logits / np.sum(exp_logits)
 
-        # Map actions to probabilities
-        acts_prob_dict = dict(zip(acts, probs))
+        # Ensure we have probabilities for ALL actions
+        final_probs = np.zeros(len(self.game_ops.all_actions))
+        for act, prob in zip(acts, probs):
+            final_probs[act] = prob
 
-        #print(f'Acts prob dict: {acts_prob_dict}')  # Debug
+        # Normalize probabilities
+        final_probs = final_probs / np.sum(final_probs)
 
-        # Prepare final action and probability lists
-        final_acts = []
-        final_probs = []
-        for act in action_space:
-            if act in acts_prob_dict:
-                final_acts.append(action_details[act])
-                final_probs.append(acts_prob_dict[act])
-            else:
-                # Assign small probability to unexplored actions
-                final_acts.append(action_details[act])
-                final_probs.append(1e-8)
+        # For returning actions, we'll use the current action space
+        final_acts = [action_details[act] for act in action_space]
 
-        
-
+        print(f'len of final probs {len(final_probs)}')
         return final_acts, final_probs
-        
+            
     @staticmethod
     def _softmax(x):
         probs = np.exp(x - np.max(x))
