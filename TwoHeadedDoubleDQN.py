@@ -95,7 +95,7 @@ class TwoHeadedDoubleDQN(nn.Module):
                 elif len(action['start']) == 3:
                     three_ball_moves.append(action_idx)
             
-            print(f'One ball moves: {one_ball_moves}', f'Two ball moves: {two_ball_moves}', f'Three ball moves: {three_ball_moves}')
+
             
             # Define and normalize probabilities for selecting each group
             probs = [0.15, 0.35, 0.5]  
@@ -145,56 +145,73 @@ class TwoHeadedDoubleDQN(nn.Module):
         # Convert to numpy array to ensure it can be processed by PyTorch
         return np.array(one_hot_encoded_grid, dtype=float)
 
-    def update(self, state, action, offensive_reward, defensive_reward, next_state, action_space, next_action_space, done):
+    def update(self, state, action_index, offensive_reward, defensive_reward, next_state, action_space, next_action_space, done):
+        # Convert inputs to tensors
         state = torch.tensor(state, dtype=torch.float32).unsqueeze(0)
         next_state = torch.tensor(next_state, dtype=torch.float32).unsqueeze(0)
-        action = torch.tensor(action, dtype=torch.long)
+        action_index = torch.tensor(action_index, dtype=torch.long)  # Action index as scalar
         offensive_reward = torch.tensor([offensive_reward], dtype=torch.float32)
         defensive_reward = torch.tensor([defensive_reward], dtype=torch.float32)
         done = torch.tensor([done], dtype=torch.float32)
-        
+
         # Convert action_space and next_action_space to boolean masks
         action_mask = torch.zeros(self.output_dim, dtype=torch.bool)
         action_mask[action_space] = True
         next_action_mask = torch.zeros(self.output_dim, dtype=torch.bool)
         next_action_mask[next_action_space] = True
-        
-        action_mask = action_mask.unsqueeze(0)
-        next_action_mask = next_action_mask.unsqueeze(0)
 
-        # Get current Q values
+        # Expand the masks to match the shape of the Q-value tensors (batch size 1)
+        action_mask = action_mask.unsqueeze(0)  # Shape [1, output_dim]
+        next_action_mask = next_action_mask.unsqueeze(0)  # Shape [1, output_dim]
+
+        # Get current Q-values for the state
         current_offensive_q, current_defensive_q = self(state)
+
         current_offensive_q = current_offensive_q.squeeze(0)
+
         current_defensive_q = current_defensive_q.squeeze(0)
 
-        # Compute target Q values
+
+        # Extract Q-values for the chosen action index
+        current_offensive_q_value = current_offensive_q[action_index]
+        current_defensive_q_value = current_defensive_q[action_index]
+
+        # Compute target Q-values
         with torch.no_grad():
-            # Use online network for action selection
+            # Use the online network to compute the next state Q-values
             next_offensive_q, next_defensive_q = self(next_state)
+            
+            # Apply the mask to set invalid actions to -inf
             next_offensive_q[~next_action_mask] = float('-inf')
             next_defensive_q[~next_action_mask] = float('-inf')
-            best_offensive_actions = next_offensive_q.argmax(dim=1, keepdim=True)
-            best_defensive_actions = next_defensive_q.argmax(dim=1, keepdim=True)
 
-            # Use target network for value estimation
+            # Choose the best actions for both heads
+            best_offensive_actions = next_offensive_q.argmax(dim=1)
+            best_defensive_actions = next_defensive_q.argmax(dim=1)
+
+            # Use the target network to compute the target Q-values for the best actions
             next_offensive_q_target, next_defensive_q_target = self(next_state, target=True)
-            max_next_offensive_q = next_offensive_q_target.gather(1, best_offensive_actions).squeeze(1)
-            max_next_defensive_q = next_defensive_q_target.gather(1, best_defensive_actions).squeeze(1)
+            max_next_offensive_q = next_offensive_q_target[0, best_offensive_actions]
+            max_next_defensive_q = next_defensive_q_target[0, best_defensive_actions]
 
+            # Calculate target Q-values using the Bellman equation
             target_offensive_q = offensive_reward + (1 - done) * 0.99 * max_next_offensive_q
             target_defensive_q = defensive_reward + (1 - done) * 0.99 * max_next_defensive_q
 
-        # Compute loss
-        loss_offensive = F.mse_loss(current_offensive_q[action], target_offensive_q)
-        loss_defensive = F.mse_loss(current_defensive_q[action], target_defensive_q)
+        # Compute the losses for both heads
+        loss_offensive = F.mse_loss(current_offensive_q_value, target_offensive_q)
+        loss_defensive = F.mse_loss(current_defensive_q_value, target_defensive_q)
         total_loss = loss_offensive + loss_defensive
 
-        # Optimize the model
+        # Perform optimization
         self.optimizer.zero_grad()
         total_loss.backward()
         self.optimizer.step()
 
         return total_loss.item()
+
+
+
 
     def update_target_network(self, tau=0.001):
         """Soft update of the target network."""
