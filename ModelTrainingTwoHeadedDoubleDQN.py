@@ -1,5 +1,5 @@
 from TwoHeadedDoubleDQN import TwoHeadedDoubleDQN
-from RewardSystemTwoHeaded import RewardSystemTwoHeaded
+
 from Player import Player
 from GameOpsRL import GameOpsRL
 import torch
@@ -10,10 +10,11 @@ import json
 from datetime import datetime
 from CurriculumLearning import CurriculumLearning
 from RewardSystemTwoHeadedSimplified import RewardSystemTwoHeadedSimplified
+from RewardSystemTwoHeadedSimplifiedALot import RewardSystemTwoHeadedSimplifiedALot
 from AnalysisTool import AnalysisTool
 
 
-def train_dqn(num_episodes, environment, dqn_model, reward_system, curriculum, epsilon_start=1.0, epsilon_decay=0.9998, epsilon_min=0.03, reward_save_interval=40, model_save_interval=100, last_saved_episode=0):
+def train_dqn(num_episodes, environment, dqn_model, reward_system, curriculum, epsilon_start=1.0, epsilon_decay=0.99998, epsilon_min=0.03, reward_save_interval=40, model_save_interval=100, last_saved_episode=0):
     epsilon = epsilon_start
     results = []
     action_history = {}
@@ -46,12 +47,12 @@ def train_dqn(num_episodes, environment, dqn_model, reward_system, curriculum, e
         while not done:
             action_space, action_details, action_mask = environment.get_action_space()
             transformed_state = dqn_model.transform_state_for_nn(state)
-            action, action_index = dqn_model.choose_action(transformed_state, epsilon, action_space, action_mask, action_details)
+            action, action_index = dqn_model.choose_action(transformed_state, epsilon, action_space, action_details)
 
             print(f"Action chosen: {action}")
             
             episode_actions.append(action)
-            next_state, move_valid, done = environment.step(action)
+            next_state, move_valid, done, ball_pushed_off = environment.step(action)
             
             curriculum.increment_move_count()
             done = curriculum.is_game_over(environment)
@@ -59,16 +60,17 @@ def train_dqn(num_episodes, environment, dqn_model, reward_system, curriculum, e
             offensive_reward = reward_system.calculate_offensive_reward(state, next_state, action['start'], action['end'])
             defensive_reward = reward_system.calculate_defensive_reward(state, next_state, action['start'], action['end'])
             
+            print(f' offensive reward from move is {offensive_reward} and defensive reward is {defensive_reward}')
             total_offensive_reward += offensive_reward
             total_defensive_reward += defensive_reward
             
             transformed_next_state = dqn_model.transform_state_for_nn(next_state)
-            encoded_action = environment.encode_action(action)
+            # encoded_action = environment.encode_action(action)
             
             next_action_space, next_action_details, next_action_mask = environment.get_action_space()
             
             #analysis_tool.record_state_action_value(state, encoded_action, offensive_reward, defensive_reward)
-            dqn_model.update(transformed_state, encoded_action, offensive_reward, defensive_reward, transformed_next_state, action_mask, next_action_mask, done)
+            dqn_model.update(transformed_state, action_index, offensive_reward, defensive_reward, transformed_next_state, action_space, next_action_space, done)
             
             print(f'DQN update done for episode {episode+1}')
             if episode % 100 == 0:  
@@ -90,6 +92,7 @@ def train_dqn(num_episodes, environment, dqn_model, reward_system, curriculum, e
                 analysis_tool.plot_q_value_distribution(state, action_details, episode)'''
 
             state = next_state
+            print(f'Next state is {state}')
         
         print('Episode done')
         
@@ -247,9 +250,9 @@ if __name__ == "__main__":
     game_ops_rl = GameOpsRL(player1, player2, initial_difficulty['max_moves'])
     game_ops_rl.game.board = curriculum.adjust_board(game_ops_rl.game.board)
     
-    dqn_model = TwoHeadedDoubleDQN(243, 140, game_ops_rl)
+    dqn_model = TwoHeadedDoubleDQN(243, 1686, game_ops_rl)
     # reward_system = RewardSystemTwoHeaded(player1, player2)
     
-    reward_system = RewardSystemTwoHeadedSimplified(player1, player2)
+    reward_system = RewardSystemTwoHeadedSimplifiedALot(player1, player2)
 
-    results, action_history, episode_reward_counters = train_dqn(1, game_ops_rl, dqn_model, reward_system, curriculum)
+    results, action_history, episode_reward_counters = train_dqn(100000, game_ops_rl, dqn_model, reward_system, curriculum)

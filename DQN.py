@@ -32,24 +32,55 @@ class DQN(nn.Module):
     def forward(self, x):
         return self.network(x)
 
-    def choose_action(self, state, epsilon, action_space, action_mask, action_details):
-        # Choose an action based on epsilon-greedy policy
-        valid_actions = [action for action, valid in zip(action_space, action_mask) if valid]
-
-        full_action_mask = np.zeros(self.output_dim, dtype=bool)
-        full_action_mask[:len(action_mask)] = action_mask
+    def choose_action(self, state, epsilon, action_space, action_details):
+        
 
     
         if np.random.random() > epsilon:
-            state = torch.tensor(state, dtype=torch.float32).unsqueeze(0)  # Add batch dimension
-            q_values = self(state).squeeze(0)  # Remove batch dimension
-            # Mask out invalid actions by setting their Q-values to a large negative value
-            q_values = q_values.detach().numpy()  # Convert to numpy array for masking
-            masked_q_values = np.where(full_action_mask, q_values, float('-inf'))
-            action_index = np.argmax(masked_q_values)
-            chosen_action_index = action_space[action_index]
+            state = torch.tensor(state, dtype=torch.float32).unsqueeze(0)
+            q_values = self(state).squeeze(0).detach().numpy()
+            valid_q_values = q_values[action_space]
+
+            for i, action_idx in enumerate(action_space):
+                print(f"Action {action_idx}: Q-value = {valid_q_values[i]}, Action = {action_details[action_idx]}")
+            
+            # Choose the action with the highest Q-value
+            chosen_action_index = action_space[np.argmax(valid_q_values)]
         else:
-            chosen_action_index = np.random.choice(valid_actions)  # Choose only among valid actions
+            # Group actions by the number of balls involved
+            one_ball_moves = []
+            two_ball_moves = []
+            three_ball_moves = []
+            
+            for action_idx in action_space:
+                action = action_details[action_idx]
+                if isinstance(action['start'], tuple) and not isinstance(action['start'][0], tuple):
+                    one_ball_moves.append(action_idx)
+                elif len(action['start']) == 2:
+                    two_ball_moves.append(action_idx)
+                elif len(action['start']) == 3:
+                    three_ball_moves.append(action_idx)
+            
+
+            
+            # Define and normalize probabilities for selecting each group
+            probs = [0.15, 0.35, 0.5]  
+            available_moves = [one_ball_moves, two_ball_moves, three_ball_moves]
+            available_probs = [prob for prob, moves in zip(probs, available_moves) if moves]
+            
+            if available_probs:
+                normalized_probs = [p / sum(available_probs) for p in available_probs]
+                chosen_move_type = np.random.choice([i for i, moves in enumerate(available_moves) if moves], p=normalized_probs)
+                
+                if chosen_move_type == 0:
+                    chosen_action_index = np.random.choice(one_ball_moves)
+                elif chosen_move_type == 1:
+                    chosen_action_index = np.random.choice(two_ball_moves)
+                else:
+                    chosen_action_index = np.random.choice(three_ball_moves)
+            else:
+                # If no moves are available in any category, revert to uniform selection
+                chosen_action_index = np.random.choice(action_space)
         
         # Retrieve the detailed action using the chosen action index
         action = action_details[chosen_action_index]
@@ -82,27 +113,34 @@ class DQN(nn.Module):
         # Convert to numpy array to ensure it can be processed by PyTorch
         return np.array(one_hot_encoded_grid, dtype=float)
 
-    def update(self, state, action, reward, next_state, action_mask, next_action_mask, done):
+    def update(self, state, action_index, reward, next_state, action_space, next_action_space, done):
+        # Convert inputs to tensors
         state = torch.tensor(state, dtype=torch.float32).unsqueeze(0)
         next_state = torch.tensor(next_state, dtype=torch.float32).unsqueeze(0)
-        action = action.clone().detach() if isinstance(action, torch.Tensor) else torch.tensor(action, dtype=torch.long)
+        action_index = torch.tensor(action_index, dtype=torch.long)  # Action index as scalar
         reward = torch.tensor([reward], dtype=torch.float32)
-        action_mask = torch.tensor(action_mask, dtype=torch.bool)
-        next_action_mask = torch.tensor(next_action_mask, dtype=torch.bool)
+        
+        done = torch.tensor([done], dtype=torch.float32)
 
-        # Ensure action_mask and next_action_mask have the correct shape
-        if action_mask.shape[0] != self.output_dim:
-            action_mask = F.pad(action_mask, (0, self.output_dim - action_mask.shape[0]), value=False)
-        if next_action_mask.shape[0] != self.output_dim:
-            next_action_mask = F.pad(next_action_mask, (0, self.output_dim - next_action_mask.shape[0]), value=False)
+        # Convert action_space and next_action_space to boolean masks
+        action_mask = torch.zeros(self.output_dim, dtype=torch.bool)
+        action_mask[action_space] = True
+        next_action_mask = torch.zeros(self.output_dim, dtype=torch.bool)
+        next_action_mask[next_action_space] = True
+
+        # Expand the masks to match the shape of the Q-value tensors (batch size 1)
+        action_mask = action_mask.unsqueeze(0)  # Shape [1, output_dim]
+        next_action_mask = next_action_mask.unsqueeze(0)  # Shape [1, output_dim]
+
+    
 
         current_q_values = self(state).squeeze(0)
-        current_q_value = current_q_values[action]
+        current_q_value = current_q_values[action_index]
 
         with torch.no_grad():
-            next_q_values = self(next_state).squeeze(0)
+            next_q_values = self(next_state)
             next_q_values[~next_action_mask] = float('-inf')
-            max_next_q = next_q_values.max()
+            max_next_q = next_q_values.argmax(dim=1)
             target_q_value = reward + (1 - done) * 0.99 * max_next_q
 
         loss = nn.functional.mse_loss(current_q_value.unsqueeze(0), target_q_value)

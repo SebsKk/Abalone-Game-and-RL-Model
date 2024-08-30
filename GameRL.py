@@ -111,6 +111,8 @@ class GameRL:
         # If the move is valid, perform the move and switch players
         # Display the board before making the move
 
+        ball_pushed_off = False
+
         #print('Making move')
         if isinstance(balls_start[0], int):
             balls_start = [balls_start]
@@ -121,7 +123,7 @@ class GameRL:
             #print('Invalid move: Ball does not belong to current player')
             #print(f'Current player: {self.current_player.color}')
             #print(f'cell belongs to     : {self.board.get_cell(balls_start[0][0], balls_start[0][1])}')
-            return False
+            return [False, ball_pushed_off]
         
         # If the move is valid, perform the move and switch players
         if self.board.is_move_valid(balls_start, balls_end) is True:
@@ -140,6 +142,7 @@ class GameRL:
                         # set the cell the enemy ball was pushed to with the enemy player's color
                         # print('Updating pushed ball color')
                         self.update_pushed_ball_color(balls_start, balls_end)
+                    ball_pushed_off = True
                 # Move the balls
                 for i in range(len(balls_start)):
                     self.board.set_cell(balls_end[i][0],balls_end[i][1], player_color) 
@@ -147,8 +150,11 @@ class GameRL:
 
             self.switch_player()
 
+         
             # print('Player switched')
-            return True
+            return [True, ball_pushed_off]
+        
+        return False, ball_pushed_off
         '''else: 
             print(f' move is {balls_start} to {balls_end}')
             print(f'current game board is {self.board.grid}')
